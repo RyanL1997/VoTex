@@ -29,8 +29,8 @@ app.post('/transcribe', upload.single('audio'), async (req, res) => {
         content: audioBytes,
       },
       config: {
-        encoding: 'LINEAR16',
-        sampleRateHertz: 16000,
+        encoding: 'WEBM_OPUS',
+        sampleRateHertz: 48000,
         languageCode: 'en-US',
       },
     };
