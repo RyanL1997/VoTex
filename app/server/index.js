@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 const speechClient = new SpeechClient({
-  keyFilename: '../keys/google-speech-to-text-key.json' // Ensure this path points to your JSON key file
+  keyFilename: '../../keys/google-speech-to-text-key.json' // Ensure this path points to your JSON key file
 });
 
 const upload = multer({ dest: 'uploads/' });

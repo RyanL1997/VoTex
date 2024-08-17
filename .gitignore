@@ -13,3 +13,4 @@
 
 # app/server
 /app/server/node_modules
+/app/server/uploads
