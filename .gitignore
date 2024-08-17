@@ -1,2 +1,15 @@
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 # keys
 /keys
+
+# app
+/app/node_modules
+
+# app/server
+/app/server/node_modules

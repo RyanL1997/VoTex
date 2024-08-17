@@ -1,37 +1,61 @@
-import React, { useState } from 'react';
-
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
-
-recognition.continuous = true;
-recognition.interimResults = true;
-recognition.lang = 'en-US';
+import React, { useState, useEffect } from 'react';
 
 function SpeechToText() {
   const [text, setText] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
 
-  const handleListen = () => {
+  useEffect(() => {
     if (isListening) {
-      recognition.start();
-      recognition.onresult = (event) => {
-        const transcript = Array.from(event.results)
-          .map(result => result[0])
-          .map(result => result.transcript)
-          .join('');
-        setText(transcript);
+      startRecording();
+    } else if (mediaRecorder) {
+      stopRecording();
+    }
+    // eslint-disable-next-line
+  }, [isListening]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      setMediaRecorder(recorder);
+
+      recorder.ondataavailable = async (event) => {
+        if (event.data.size > 0) {
+          const audioBlob = event.data;
+          await handleFileUpload(audioBlob);
+        }
       };
-      recognition.onerror = (event) => {
-        console.error("Error occurred in recognition: ", event.error);
-      };
-    } else {
-      recognition.stop();
+
+      recorder.start();
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorder.stop();
+  };
+
+  const handleFileUpload = async (audioBlob) => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'audio.wav');
+
+    try {
+      const response = await fetch('http://localhost:5000/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      setText(data.transcription);
+    } catch (error) {
+      console.error('Error uploading file:', error);
     }
   };
 
   const toggleListen = () => {
     setIsListening(prevState => !prevState);
-    handleListen();
   };
 
   return (
