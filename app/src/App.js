@@ -6,7 +6,7 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Speech to Text Converter</h1>
+        <h1>VoTex</h1>
         <SpeechToText />
       </header>
     </div>
