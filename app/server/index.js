@@ -1,9 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
 const { SpeechClient } = require('@google-cloud/speech');
-const fs = require('fs');
-const util = require('util');
+const WebSocket = require('ws');
 
 const app = express();
 const port = 5000;
@@ -12,42 +10,47 @@ app.use(cors());
 app.use(express.json());
 
 const speechClient = new SpeechClient({
-  keyFilename: '../../keys/google-speech-to-text-key.json' // Ensure this path points to your JSON key file
+  keyFilename: '../../keys/google-speech-to-text-key.json',
 });
 
-const upload = multer({ dest: 'uploads/' });
+const server = app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
 
-app.post('/transcribe', upload.single('audio'), async (req, res) => {
-  try {
-    const fileName = req.file.path;
-    const file = await util.promisify(fs.readFile)(fileName);
+const wss = new WebSocket.Server({ server });
 
-    const audioBytes = file.toString('base64');
+wss.on('connection', (ws) => {
+  console.log('Client connected');
 
-    const request = {
-      audio: {
-        content: audioBytes,
-      },
+  const recognizeStream = speechClient
+    .streamingRecognize({
       config: {
         encoding: 'WEBM_OPUS',
         sampleRateHertz: 48000,
         languageCode: 'en-US',
       },
-    };
+      interimResults: true, // Return partial results
+    })
+    .on('error', (error) => {
+      console.error('Error during streaming:', error);
+      ws.close();
+    })
+    .on('data', (data) => {
+      if (data.results[0] && data.results[0].alternatives[0]) {
+        let transcript = data.results[0].alternatives[0].transcript;
+        if (data.results[0].isFinal) {
+          transcript += ' [FINAL]'; // Mark the transcript as final
+        }
+        ws.send(transcript);
+      }
+    });
 
-    const [response] = await speechClient.recognize(request);
-    const transcription = response.results
-      .map(result => result.alternatives[0].transcript)
-      .join('\n');
-    res.json({ transcription });
+  ws.on('message', (message) => {
+    recognizeStream.write(message);
+  });
 
-    fs.unlinkSync(fileName); // Clean up the uploaded file
-  } catch (error) {
-    console.error('Error transcribing audio:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  ws.on('close', () => {
+    recognizeStream.end();
+    console.log('Client disconnected');
+  });
 });

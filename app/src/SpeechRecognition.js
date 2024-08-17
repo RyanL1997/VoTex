@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function SpeechToText() {
   const [text, setText] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const socketRef = useRef(null);
+  const finalTranscriptRef = useRef(''); // To store finalized transcriptions
+  const interimTranscriptRef = useRef(''); // To store interim transcriptions
 
   useEffect(() => {
     if (isListening) {
       startRecording();
-    } else if (mediaRecorder) {
+    } else if (socketRef.current) {
       stopRecording();
     }
     // eslint-disable-next-line
@@ -18,44 +20,43 @@ function SpeechToText() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
-      setMediaRecorder(recorder);
 
-      recorder.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
-          const audioBlob = event.data;
-          await handleFileUpload(audioBlob);
+      socketRef.current = new WebSocket('ws://localhost:5000');
+
+      socketRef.current.onmessage = (event) => {
+        const result = event.data.trim();
+        if (result.includes('[FINAL]')) {
+          // Final result, update the final transcript
+          finalTranscriptRef.current += result.replace('[FINAL]', '') + ' ';
+          interimTranscriptRef.current = ''; // Clear interim transcript
+          setText(finalTranscriptRef.current); // Update displayed text with final transcript
+        } else {
+          // Interim result, update interim transcript
+          interimTranscriptRef.current = result;
+          setText(finalTranscriptRef.current + interimTranscriptRef.current);
         }
       };
 
-      recorder.start();
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(event.data);
+        }
+      };
+
+      recorder.start(250); // Send data every 250ms
     } catch (error) {
       console.error('Error accessing microphone:', error);
     }
   };
 
   const stopRecording = () => {
-    mediaRecorder.stop();
-  };
-
-  const handleFileUpload = async (audioBlob) => {
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'audio.wav');
-
-    try {
-      const response = await fetch('http://localhost:5000/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await response.json();
-      setText(data.transcription);
-    } catch (error) {
-      console.error('Error uploading file:', error);
+    if (socketRef.current) {
+      socketRef.current.close();
     }
   };
 
   const toggleListen = () => {
-    setIsListening(prevState => !prevState);
+    setIsListening((prevState) => !prevState);
   };
 
   return (
